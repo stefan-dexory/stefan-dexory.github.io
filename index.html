@@ -33,46 +33,34 @@
   a.node{
     position:fixed; width:30px; height:30px; margin:-15px 0 0 -15px;
     border-radius:50%; display:block; text-decoration:none;
-    outline-offset:6px;
-  }
-  a.node::before{
-    content:''; position:absolute; left:50%; top:50%;
-    width:6px; height:6px; margin:-3px 0 0 -3px; border-radius:50%;
-    background:var(--ink); opacity:.62;
-    transition: opacity .3s ease, transform .3s ease;
-  }
-  a.node:hover::before, a.node:focus-visible::before{
-    opacity:1; transform:scale(1.4);
+    outline-offset:6px; z-index:3;
   }
   a.node:focus-visible{ outline: 1px solid var(--ink); }
 
-  .whisper{
-    position:fixed; font-size:11px; color:var(--ink);
-    opacity:0; transform: translateY(2px);
-    transition: opacity .5s ease, transform .5s ease;
-    pointer-events:none; white-space:nowrap;
-  }
-  a.node:hover ~ .whisper,
-  a.node:focus-visible ~ .whisper{
-    opacity:0.72; transform: translateY(0);
+  .void-zone{
+    position:fixed; border-radius:50%; z-index:2;
   }
 
   .info{
-    position:fixed; text-align:center; pointer-events:none;
-    color:var(--ink); white-space:nowrap;
-    opacity:0; animation: reveal 1.2s ease forwards; animation-delay:.2s;
+    position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+    text-align:center; pointer-events:none; white-space:nowrap;
+    color:var(--ink);
+    opacity:0; transition:opacity .6s ease;
   }
-  .info .name{ font-size:13px; opacity:0.78; }
-  .info .role{ font-size:11px; opacity:0.5; margin-top:5px; }
-  .info .email{ font-size:11px; opacity:0.5; margin-top:5px; pointer-events:auto; }
-  .info .email a{ color:var(--ink); text-decoration:none; border-bottom:1px solid var(--ink-faint); }
-  .info .email a:hover, .info .email a:focus-visible{ opacity:1; }
+  .void-zone:hover .info,
+  .void-zone.revealed .info{ opacity:1; }
 
-  @keyframes reveal{ to{ opacity:1; } }
+  .info .name{ font-size:13px; opacity:0.82; }
+  .info .email{ font-size:11px; opacity:0.55; margin-top:6px; pointer-events:none; }
+  .info .site{ font-size:11px; opacity:0.55; margin-top:6px; pointer-events:none; }
+  .info .email a, .info .site a{ color:var(--ink); text-decoration:none; border-bottom:1px solid var(--ink-faint); }
+  .info .email a:hover, .info .email a:focus-visible,
+  .info .site a:hover, .info .site a:focus-visible{ opacity:1; border-bottom-color:var(--ink); }
+  .void-zone:hover .info .email, .void-zone.revealed .info .email,
+  .void-zone:hover .info .site, .void-zone.revealed .info .site{ pointer-events:auto; }
 
   @media (prefers-reduced-motion: reduce){
-    .whisper{ transition:none; }
-    .info{ animation:none; opacity:1; }
+    .info{ transition:none; }
   }
 </style>
 </head>
@@ -83,22 +71,22 @@
 <span class="mark tl" id="markTL">0 · 0</span>
 <span class="mark br" id="markBR">n=0</span>
 
-<div class="info" id="info">
-  <div class="name">Stefan Pretorius</div>
-  <div class="role">Associate Forward Deployed Engineer @ Dexory</div>
-  <div class="email"><a href="mailto:stefan.pretorius@dexory.com">stefan.pretorius@dexory.com</a></div>
+<div class="void-zone" id="voidZone">
+  <div class="info" id="info">
+    <div class="name">Stefan Pretorius</div>
+    <div class="email"><a href="mailto:stefan.pretorius@dexory.com">stefan.pretorius@dexory.com</a></div>
+    <div class="site"><a href="https://fernshy.com" rel="noopener">fernshy.com</a></div>
+  </div>
 </div>
 
 <a class="node" id="node" href="https://fernshy.com" aria-label="fernshy.com" rel="noopener"></a>
-<span class="whisper" id="whisper">fernshy.com</span>
 
 <script>
 (function(){
   var canvas = document.getElementById('field');
   var ctx = canvas.getContext('2d');
   var node = document.getElementById('node');
-  var whisper = document.getElementById('whisper');
-  var info = document.getElementById('info');
+  var voidZone = document.getElementById('voidZone');
   var markBR = document.getElementById('markBR');
   var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -137,27 +125,27 @@
       var r = rand();
       var baseSize = r < 0.08 ? 1.9 + rand()*1.3 : 0.7 + rand()*1.1;
       var baseAlpha = 0.42 + rand()*0.5;
-      var size = baseSize * (1 + p * 1.7) * weight;
-      var alpha = Math.min(1, baseAlpha + p * 0.55);
+      var size = baseSize * (1 + p * 0.85) * weight;
+      var alpha = Math.min(1, baseAlpha + p * 0.275);
       dots.push({ ox: jx, oy: jy, x: jx, y: jy, size: size, alpha: alpha });
     }
 
     dots = [];
-    // base field, uniform density
+    // base field: a true grid, each dot only slightly wavering off its point
     for (var y = cell/2; y < H; y += cell){
       for (var x = cell/2; x < W; x += cell){
-        var jx = x + (rand()-0.5) * cell * 0.8;
-        var jy = y + (rand()-0.5) * cell * 0.8;
+        var jx = x + (rand()-0.5) * cell * 0.22;
+        var jy = y + (rand()-0.5) * cell * 0.22;
         addDot(jx, jy, 1);
       }
     }
-    // halo: extra ink clustering right at the edge of the void, thinning outward
+    // halo: same grid, subdivided, so the extra ink near the void still reads as a grid
     var haloCell = cell * 0.5;
     var boxX = rx * ringOuter * 1.05, boxY = ry * ringOuter * 1.05;
     for (var hy = cy - boxY; hy < cy + boxY; hy += haloCell){
       for (var hx = cx - boxX; hx < cx + boxX; hx += haloCell){
-        var jhx = hx + (rand()-0.5) * haloCell;
-        var jhy = hy + (rand()-0.5) * haloCell;
+        var jhx = hx + (rand()-0.5) * haloCell * 0.22;
+        var jhy = hy + (rand()-0.5) * haloCell * 0.22;
         var nx2 = (jhx - cx) / rx, ny2 = (jhy - cy) / ry;
         var d2 = nx2*nx2 + ny2*ny2;
         var p2 = proximity(d2);
@@ -167,14 +155,14 @@
 
     markBR.textContent = 'n=' + dots.length;
 
-    node.style.left = cx + 'px';
-    node.style.top = (cy + Math.max(24, ry * 0.16)) + 'px';
-    whisper.style.left = (cx + 18) + 'px';
-    whisper.style.top = (cy + Math.max(24, ry * 0.16) - 5) + 'px';
+    voidZone.style.left = cx + 'px';
+    voidZone.style.top = cy + 'px';
+    voidZone.style.width = (rx * 2) + 'px';
+    voidZone.style.height = (ry * 2) + 'px';
+    voidZone.style.transform = 'translate(-50%, -50%)';
 
-    info.style.left = cx + 'px';
-    info.style.top = (cy - Math.max(30, ry * 0.22)) + 'px';
-    info.style.transform = 'translate(-50%, -100%)';
+    node.style.left = cx + 'px';
+    node.style.top = (cy + Math.max(24, ry * 0.4)) + 'px';
   }
 
   function frame(now){
@@ -224,6 +212,19 @@
     if (e.touches && e.touches[0]) setPointer(e.touches[0].clientX, e.touches[0].clientY);
   }, { passive:true });
   window.addEventListener('touchend', clearPointer);
+
+  // touch has no hover: tapping the empty space toggles the info reveal
+  voidZone.addEventListener('touchstart', function(e){
+    e.stopPropagation();
+    voidZone.classList.toggle('revealed');
+  }, { passive:true });
+  document.addEventListener('touchstart', function(e){
+    if (!voidZone.contains(e.target)) voidZone.classList.remove('revealed');
+  }, { passive:true });
+
+  // keyboard fallback: tabbing to the site link also reveals the info
+  node.addEventListener('focus', function(){ voidZone.classList.add('revealed'); });
+  node.addEventListener('blur', function(){ voidZone.classList.remove('revealed'); });
 
   var resizeTO;
   window.addEventListener('resize', function(){
