@@ -1,1 +1,2 @@
-# robot.stefan.pretorius.github.io
+# stefan-dexory.github.io/
+# an ode to consistency and focus
