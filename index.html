@@ -1,3 +1,239 @@
-<h1>Stefan Pretroius</h1>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>fernshy</title>
+<style>
+  :root{
+    --bone:#e8e4da;
+    --ink:#2b2822;
+    --ink-faint: rgba(43,40,34,0.38);
+  }
+  html,body{
+    margin:0; padding:0; height:100%; width:100%;
+    overflow:hidden; background:var(--bone);
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior:none;
+  }
+  body{
+    font-family: ui-monospace, "SF Mono", "Cascadia Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  }
+  canvas{
+    position:fixed; inset:0; display:block; width:100vw; height:100dvh;
+  }
+  .mark{
+    position:fixed; font-size:10px; letter-spacing:0.02em;
+    color: var(--ink-faint); pointer-events:none; user-select:none;
+    line-height:1;
+  }
+  .mark.tl{ top:18px; left:18px; }
+  .mark.br{ bottom:18px; right:18px; text-align:right; }
 
-<h2><i>Associate Forward Deployed Engineer @ Dexory</i></h2>
+  a.node{
+    position:fixed; width:30px; height:30px; margin:-15px 0 0 -15px;
+    border-radius:50%; display:block; text-decoration:none;
+    outline-offset:6px;
+  }
+  a.node::before{
+    content:''; position:absolute; left:50%; top:50%;
+    width:6px; height:6px; margin:-3px 0 0 -3px; border-radius:50%;
+    background:var(--ink); opacity:.62;
+    transition: opacity .3s ease, transform .3s ease;
+  }
+  a.node:hover::before, a.node:focus-visible::before{
+    opacity:1; transform:scale(1.4);
+  }
+  a.node:focus-visible{ outline: 1px solid var(--ink); }
+
+  .whisper{
+    position:fixed; font-size:11px; color:var(--ink);
+    opacity:0; transform: translateY(2px);
+    transition: opacity .5s ease, transform .5s ease;
+    pointer-events:none; white-space:nowrap;
+  }
+  a.node:hover ~ .whisper,
+  a.node:focus-visible ~ .whisper{
+    opacity:0.72; transform: translateY(0);
+  }
+
+  .info{
+    position:fixed; text-align:center; pointer-events:none;
+    color:var(--ink); white-space:nowrap;
+    opacity:0; animation: reveal 1.2s ease forwards; animation-delay:.2s;
+  }
+  .info .name{ font-size:13px; opacity:0.78; }
+  .info .role{ font-size:11px; opacity:0.5; margin-top:5px; }
+  .info .email{ font-size:11px; opacity:0.5; margin-top:5px; pointer-events:auto; }
+  .info .email a{ color:var(--ink); text-decoration:none; border-bottom:1px solid var(--ink-faint); }
+  .info .email a:hover, .info .email a:focus-visible{ opacity:1; }
+
+  @keyframes reveal{ to{ opacity:1; } }
+
+  @media (prefers-reduced-motion: reduce){
+    .whisper{ transition:none; }
+    .info{ animation:none; opacity:1; }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="field" aria-hidden="true"></canvas>
+
+<span class="mark tl" id="markTL">0 · 0</span>
+<span class="mark br" id="markBR">n=0</span>
+
+<div class="info" id="info">
+  <div class="name">Stefan Pretorius</div>
+  <div class="role">Associate Forward Deployed Engineer @ Dexory</div>
+  <div class="email"><a href="mailto:stefan.pretorius@dexory.com">stefan.pretorius@dexory.com</a></div>
+</div>
+
+<a class="node" id="node" href="https://fernshy.com" aria-label="fernshy.com" rel="noopener"></a>
+<span class="whisper" id="whisper">fernshy.com</span>
+
+<script>
+(function(){
+  var canvas = document.getElementById('field');
+  var ctx = canvas.getContext('2d');
+  var node = document.getElementById('node');
+  var whisper = document.getElementById('whisper');
+  var info = document.getElementById('info');
+  var markBR = document.getElementById('markBR');
+  var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  var DPR = Math.min(window.devicePixelRatio || 1, 2);
+  var W, H, cx, cy, dots = [];
+
+  var pointer = { x: -9999, y: -9999, active: false };
+  var start = performance.now();
+
+  function seedRand(seed){
+    var s = seed % 2147483647; if (s <= 0) s += 2147483646;
+    return function(){ s = s * 16807 % 2147483647; return (s - 1) / 2147483646; };
+  }
+
+  function build(){
+    W = window.innerWidth; H = window.innerHeight;
+    canvas.width = W * DPR; canvas.height = H * DPR;
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+    cx = W/2; cy = H/2;
+
+    var cell = Math.max(15, Math.min(30, W/34));
+    var rx = Math.min(W,H) * 0.235;
+    var ry = rx * 0.85;
+    var ringOuter = 2.05; // normalized distance where the halo fully fades to baseline
+    var rand = seedRand(1337);
+
+    function proximity(d){
+      if (d <= 1 || d >= ringOuter) return 0;
+      return (ringOuter - d) / (ringOuter - 1);
+    }
+    function addDot(jx, jy, weight){
+      var nx = (jx - cx) / rx, ny = (jy - cy) / ry;
+      var d = nx*nx + ny*ny;
+      if (d < 1) return; // empty core, never filled
+      var p = proximity(d);
+      var r = rand();
+      var baseSize = r < 0.08 ? 1.9 + rand()*1.3 : 0.7 + rand()*1.1;
+      var baseAlpha = 0.42 + rand()*0.5;
+      var size = baseSize * (1 + p * 1.7) * weight;
+      var alpha = Math.min(1, baseAlpha + p * 0.55);
+      dots.push({ ox: jx, oy: jy, x: jx, y: jy, size: size, alpha: alpha });
+    }
+
+    dots = [];
+    // base field, uniform density
+    for (var y = cell/2; y < H; y += cell){
+      for (var x = cell/2; x < W; x += cell){
+        var jx = x + (rand()-0.5) * cell * 0.8;
+        var jy = y + (rand()-0.5) * cell * 0.8;
+        addDot(jx, jy, 1);
+      }
+    }
+    // halo: extra ink clustering right at the edge of the void, thinning outward
+    var haloCell = cell * 0.5;
+    var boxX = rx * ringOuter * 1.05, boxY = ry * ringOuter * 1.05;
+    for (var hy = cy - boxY; hy < cy + boxY; hy += haloCell){
+      for (var hx = cx - boxX; hx < cx + boxX; hx += haloCell){
+        var jhx = hx + (rand()-0.5) * haloCell;
+        var jhy = hy + (rand()-0.5) * haloCell;
+        var nx2 = (jhx - cx) / rx, ny2 = (jhy - cy) / ry;
+        var d2 = nx2*nx2 + ny2*ny2;
+        var p2 = proximity(d2);
+        if (p2 > 0 && rand() < p2 * 0.9) addDot(jhx, jhy, 0.85);
+      }
+    }
+
+    markBR.textContent = 'n=' + dots.length;
+
+    node.style.left = cx + 'px';
+    node.style.top = (cy + Math.max(24, ry * 0.16)) + 'px';
+    whisper.style.left = (cx + 18) + 'px';
+    whisper.style.top = (cy + Math.max(24, ry * 0.16) - 5) + 'px';
+
+    info.style.left = cx + 'px';
+    info.style.top = (cy - Math.max(30, ry * 0.22)) + 'px';
+    info.style.transform = 'translate(-50%, -100%)';
+  }
+
+  function frame(now){
+    var t = Math.min(1, (now - start) / 900);
+    var ease = 1 - Math.pow(1-t, 3);
+
+    ctx.clearRect(0,0,W,H);
+    ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--ink').trim() || '#2b2822';
+
+    var repelRadius = 70, repelStrength = 10;
+
+    for (var i=0;i<dots.length;i++){
+      var d = dots[i];
+      var tx = d.ox, ty = d.oy;
+      if (!reduced && pointer.active){
+        var dx = d.ox - pointer.x, dy = d.oy - pointer.y;
+        var dist = Math.sqrt(dx*dx + dy*dy);
+        if (dist < repelRadius && dist > 0.01){
+          var f = (1 - dist/repelRadius) * repelStrength;
+          tx += (dx/dist) * f;
+          ty += (dy/dist) * f;
+        }
+      }
+      d.x += (tx - d.x) * 0.12;
+      d.y += (ty - d.y) * 0.12;
+
+      ctx.globalAlpha = d.alpha * ease;
+      ctx.beginPath();
+      ctx.arc(d.x, d.y, d.size/2, 0, Math.PI*2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    if (t < 1 || pointer.active) requestAnimationFrame(frame);
+    else animRunning = false;
+  }
+
+  var animRunning = false;
+  function kick(){ if (!animRunning){ animRunning = true; requestAnimationFrame(frame); } }
+
+  function setPointer(x,y){ pointer.x = x; pointer.y = y; pointer.active = true; kick(); }
+  function clearPointer(){ pointer.active = false; }
+
+  window.addEventListener('mousemove', function(e){ setPointer(e.clientX, e.clientY); });
+  window.addEventListener('mouseleave', clearPointer);
+  window.addEventListener('touchmove', function(e){
+    if (e.touches && e.touches[0]) setPointer(e.touches[0].clientX, e.touches[0].clientY);
+  }, { passive:true });
+  window.addEventListener('touchend', clearPointer);
+
+  var resizeTO;
+  window.addEventListener('resize', function(){
+    clearTimeout(resizeTO);
+    resizeTO = setTimeout(function(){ build(); start = performance.now(); kick(); }, 120);
+  });
+
+  build();
+  kick();
+})();
+</script>
+</body>
+</html>
